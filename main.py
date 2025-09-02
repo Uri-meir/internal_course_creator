@@ -51,6 +51,13 @@ class CourseCreator:
         if test_mode:
             self.config.test_mode = True
         
+        # Debug options
+        self.max_lessons = None
+        self.start_from_step = 1
+        self.skip_steps = []
+        self.retry_count = 3
+        self.timeout = 300
+        
         # Initialize components
         self._initialize_components()
         
@@ -102,6 +109,12 @@ class CourseCreator:
             logger.info("📋 Step 1: Planning course structure...")
             domain_analysis = self.course_planner.analyze_domain(self.domain)
             curriculum = self.course_planner.generate_curriculum(domain_analysis)
+            
+            # Apply lesson limit if specified
+            if self.max_lessons and len(curriculum.lessons) > self.max_lessons:
+                original_lessons = len(curriculum.lessons)
+                curriculum.lessons = curriculum.lessons[:self.max_lessons]
+                logger.info(f"🔍 Limited lessons from {original_lessons} to {self.max_lessons}")
             
             self.course_data['course_info'] = curriculum.model_dump()
             self.course_data['domain_analysis'] = domain_analysis
@@ -254,16 +267,70 @@ class CourseCreator:
         }
         
         return summary
+    
+    def show_generation_plan(self):
+        """Show what would be generated without creating files"""
+        logger.info("🔍 DRY RUN - Generation Plan")
+        logger.info("=" * 50)
+        logger.info(f"Domain: {self.domain}")
+        logger.info(f"Test Mode: {self.config.test_mode}")
+        logger.info(f"Max Lessons: {self.max_lessons or 'All'}")
+        logger.info(f"Start From Step: {self.start_from_step}")
+        logger.info(f"Skip Steps: {self.skip_steps or 'None'}")
+        logger.info(f"Retry Count: {self.retry_count}")
+        logger.info(f"Timeout: {self.timeout} seconds")
+        logger.info("=" * 50)
+        logger.info("This would generate a complete course with all components.")
+        logger.info("Use --test flag to run with mock clients.")
 
 def main():
-    """Main entry point"""
+    """Main entry point with debug options"""
     
-    parser = argparse.ArgumentParser(description='AI Course Creator')
+    parser = argparse.ArgumentParser(description='AI Course Creator with Debug Options')
+    
+    # Basic arguments
     parser.add_argument('--domain', required=True, help='Course domain/topic')
     parser.add_argument('--test', action='store_true', help='Run in test mode')
     parser.add_argument('--test-e2e', action='store_true', help='Run end-to-end test')
     
+    # Debug arguments
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('--step', type=int, help='Start from specific step (1-10)')
+    parser.add_argument('--max-lessons', type=int, help='Limit number of lessons to generate')
+    parser.add_argument('--skip-steps', nargs='+', help='Skip specific steps (e.g., --skip-steps 6 7 8)')
+    parser.add_argument('--retry-count', type=int, default=3, help='Number of retries for content generation')
+    parser.add_argument('--timeout', type=int, default=300, help='Timeout in seconds for each step')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would be generated without creating files')
+    parser.add_argument('--log-file', help='Save logs to specific file')
+    
     args = parser.parse_args()
+    
+    # Setup logging based on debug arguments
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger('components').setLevel(logging.DEBUG)
+        logging.getLogger('mocks').setLevel(logging.DEBUG)
+    
+    if args.verbose:
+        # Add console handler with more detailed formatting
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(console_handler)
+    
+    if args.log_file:
+        # Add file handler
+        file_handler = logging.FileHandler(args.log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(file_handler)
+    
+    # Log debug arguments
+    if args.debug:
+        logger.info("🔍 Debug mode enabled")
+        logger.info(f"Arguments: {vars(args)}")
     
     try:
         if args.test_e2e:
@@ -280,8 +347,35 @@ def main():
                 logger.error("❌ End-to-end test failed!")
                 sys.exit(1)
         else:
-            # Normal course generation
+            # Normal course generation with debug options
             creator = CourseCreator(args.domain, test_mode=args.test)
+            
+            # Apply debug options
+            if args.max_lessons:
+                creator.max_lessons = args.max_lessons
+                logger.info(f"🔍 Limiting to {args.max_lessons} lessons")
+            
+            if args.step:
+                creator.start_from_step = args.step
+                logger.info(f"🔍 Starting from step {args.step}")
+            
+            if args.skip_steps:
+                creator.skip_steps = [int(s) for s in args.skip_steps]
+                logger.info(f"🔍 Skipping steps: {args.skip_steps}")
+            
+            if args.retry_count:
+                creator.retry_count = args.retry_count
+                logger.info(f"🔍 Setting retry count to {args.retry_count}")
+            
+            if args.timeout:
+                creator.timeout = args.timeout
+                logger.info(f"🔍 Setting timeout to {args.timeout} seconds")
+            
+            if args.dry_run:
+                logger.info("🔍 Dry run mode - showing generation plan...")
+                creator.show_generation_plan()
+                return
+            
             success = creator.generate_course()
             
             if success:

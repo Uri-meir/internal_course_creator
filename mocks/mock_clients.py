@@ -212,20 +212,36 @@ class MockChatCompletions:
     
     def _generate_script_content(self, message: str) -> str:
         """Generate mock script content response"""
-        return """
-        Welcome to this lesson! [PAUSE:1s]
         
-        Today we'll learn about important concepts. [PAUSE:1.5s]
+        # Extract lesson title from message
+        lesson_title = self._extract_lesson_title(message)
         
-        Let me explain the key points. [EMPHASIS]This is crucial[/EMPHASIS].
+        return f"""
+        Welcome to lesson {lesson_title}! [PAUSE:1s]
+        
+        Today we're going to explore some amazing concepts that will help you understand this topic better. [PAUSE:1.5s]
+        
+        Let me start by explaining what {lesson_title} is all about. [EMPHASIS]This is crucial[/EMPHASIS] for your learning journey.
         
         [PAUSE:2s]
         
-        Now let's practice together.
+        Think of {lesson_title} like building with LEGO blocks. Each piece has a specific purpose, and when you put them together just right, you create something incredible!
         
         [PAUSE:1s]
         
-        Great job! Keep practicing.
+        Now, let's see how this works in practice. I'll show you some real examples that will make everything click.
+        
+        [PAUSE:1.5s]
+        
+        Great! You're doing well so far. Let me explain the next important concept.
+        
+        [PAUSE:1s]
+        
+        To wrap up, let's review what we've learned today about {lesson_title}.
+        
+        [PAUSE:2s]
+        
+        Thanks for joining me in this lesson. I'll see you in the next one!
         """
     
     def _generate_course_description(self, message: str) -> str:

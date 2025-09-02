@@ -102,24 +102,22 @@ class ScriptWriter:
         """Create script for theory-based lessons"""
         
         script_prompt = f"""
-        Convert this lesson content into a natural, conversational speech script for an AI presenter:
+        Create a natural, conversational speech script for an AI presenter about: {lesson_content.get('title')}
         
-        Lesson Title: {lesson_content.get('title')}
-        Duration: {lesson_content.get('duration_minutes')} minutes
-        Learning Objectives: {lesson_content.get('learning_objectives', [])}
-        Introduction: {lesson_content.get('introduction', '')}
+        IMPORTANT: Respond with ONLY the speech script text, no JSON, no formatting, no metadata.
         
-        Theory Content: {json.dumps(lesson_content.get('theory_content', {}), indent=2)}
-        Key Takeaways: {lesson_content.get('key_takeaways', [])}
+        The script should:
+        - Be conversational and engaging
+        - Include natural pauses [PAUSE:1s]
+        - Emphasize key points [EMPHASIS]like this[/EMPHASIS]
+        - Be about {lesson_content.get('duration_minutes', 15)} minutes long
+        - Cover the topic: {lesson_content.get('title')}
         
-        Create a natural, engaging script that:
-        - Uses conversational language
-        - Includes appropriate pauses [PAUSE:1s]
-        - Has clear transitions between sections
-        - Emphasizes key points [EMPHASIS]like this[/EMPHASIS]
-        - Is optimized for {lesson_content.get('duration_minutes', 15)} minutes
+        Use this content as inspiration:
+        - Introduction: {lesson_content.get('introduction', '')}
+        - Key concepts: {lesson_content.get('key_takeaways', [])}
         
-        Format with timing cues and natural speech patterns.
+        Start directly with the speech content, no quotes or formatting.
         """
         
         try:
@@ -130,7 +128,11 @@ class ScriptWriter:
                 temperature=0.7
             )
             
-            script = response.choices[0].message.content
+            script = response.choices[0].message.content.strip()
+            
+            # Clean up any remaining formatting
+            script = self._clean_script_formatting(script)
+            
             return self._add_timing_cues(script)
             
         except Exception as e:
@@ -141,23 +143,22 @@ class ScriptWriter:
         """Create script for hands-on coding lessons"""
         
         script_prompt = f"""
-        Convert this hands-on lesson into a natural speech script for an AI presenter:
+        Create a natural speech script for an AI presenter about: {lesson_content.get('title')}
         
-        Lesson Title: {lesson_content.get('title')}
-        Duration: {lesson_content.get('duration_minutes')} minutes
-        Setup Instructions: {lesson_content.get('setup_instructions', '')}
-        Code Examples: {json.dumps(lesson_content.get('code_examples', []), indent=2)}
-        Exercises: {json.dumps(lesson_content.get('exercises', []), indent=2)}
+        IMPORTANT: Respond with ONLY the speech script text, no JSON, no formatting, no metadata.
         
-        Create an engaging script that:
-        - Guides students through setup and coding
-        - Explains code examples clearly
-        - Provides step-by-step instructions
-        - Uses natural language for technical concepts
-        - Includes appropriate pauses and transitions
-        - Is optimized for {lesson_content.get('duration_minutes', 15)} minutes
+        The script should:
+        - Be conversational and engaging
+        - Include natural pauses [PAUSE:1s]
+        - Emphasize key points [EMPHASIS]like this[/EMPHASIS]
+        - Be about {lesson_content.get('duration_minutes', 15)} minutes long
+        - Guide students through hands-on coding activities
         
-        Format with timing cues and clear instructions.
+        Use this content as inspiration:
+        - Setup: {lesson_content.get('setup_instructions', '')}
+        - Key concepts: {lesson_content.get('key_takeaways', [])}
+        
+        Start directly with the speech content, no quotes or formatting.
         """
         
         try:
@@ -168,7 +169,11 @@ class ScriptWriter:
                 temperature=0.7
             )
             
-            script = response.choices[0].message.content
+            script = response.choices[0].message.content.strip()
+            
+            # Clean up any remaining formatting
+            script = self._clean_script_formatting(script)
+            
             return self._add_timing_cues(script)
             
         except Exception as e:
@@ -194,6 +199,40 @@ Now let's put what we've learned into practice!
 """
         
         return mixed_script.strip()
+    
+    def _clean_script_formatting(self, script: str) -> str:
+        """Clean up script formatting to ensure it's plain text"""
+        
+        # Remove JSON formatting if present
+        if script.startswith('{') and script.endswith('}'):
+            try:
+                # Try to extract speech content from JSON
+                data = json.loads(script)
+                if isinstance(data, dict):
+                    # Combine all text fields into a single script
+                    text_parts = []
+                    for key, value in data.items():
+                        if isinstance(value, str):
+                            text_parts.append(value)
+                        elif isinstance(value, list):
+                            text_parts.extend([str(item) for item in value if isinstance(item, str)])
+                    
+                    script = ' '.join(text_parts)
+            except:
+                pass
+        
+        # Remove markdown formatting
+        script = script.replace('```', '').replace('**', '').replace('*', '')
+        
+        # Remove any remaining JSON-like structures
+        script = re.sub(r'"[^"]*":\s*', '', script)
+        script = re.sub(r'\{[^}]*\}', '', script)
+        script = re.sub(r'\[[^\]]*\]', '', script)
+        
+        # Clean up extra whitespace
+        script = re.sub(r'\s+', ' ', script).strip()
+        
+        return script
     
     def _add_timing_cues(self, script: str) -> str:
         """Add timing cues and optimize pacing"""
