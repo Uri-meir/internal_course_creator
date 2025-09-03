@@ -78,15 +78,15 @@ class CourseCreator:
             if not self.config.test_mode and not openai_key:
                 raise ValueError("OpenAI API key required for production mode")
             
-            # Initialize components with test mode override
+            # Initialize components with test mode override and domain parameter
             self.course_planner = CoursePlanner(openai_key)
             self.content_generator = ContentGenerator(openai_key, test_mode=self.config.test_mode)
             self.notebook_creator = NotebookCreator()
             self.script_writer = ScriptWriter(openai_key, test_mode=self.config.test_mode)
-            self.background_generator = BackgroundGenerator(openai_key, test_mode=self.config.test_mode)
-            self.ai_presenter = AIPresenter(did_key, test_mode=self.config.test_mode)
-            self.video_assembler = VideoAssembler()
-            self.course_packager = CoursePackager()
+            self.background_generator = BackgroundGenerator(openai_key, test_mode=self.config.test_mode, domain=self.domain)
+            self.ai_presenter = AIPresenter(did_key, test_mode=self.config.test_mode, domain=self.domain)
+            self.video_assembler = VideoAssembler(domain=self.domain)
+            self.course_packager = CoursePackager(domain=self.domain)
             
             logger.info("All components initialized successfully")
             
