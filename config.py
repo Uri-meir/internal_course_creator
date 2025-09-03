@@ -24,9 +24,13 @@ class Config:
     def _get_test_mode(self) -> bool:
         """Get test mode setting"""
         # Check environment variable first
-        test_env = os.getenv('TEST_MODE', '').lower()
-        if test_env in ['true', '1', 'yes']:
+        test_env = os.getenv('TEST_MODE', '')
+        
+        test_env_lower = test_env.lower()
+        if test_env_lower in ['true', '1', 'yes']:
             return True
+        elif test_env_lower in ['false', '0', 'no']:
+            return False
         
         # Check config file
         try:
@@ -60,6 +64,19 @@ class Config:
             'marketing': f'{base_dir}/marketing',
             'packages': f'{base_dir}/packages'
         }
+    
+    def get_domain_output_dir(self, domain: str, category: str = None) -> str:
+        """Get output directory for specific domain"""
+        # Clean domain name for filesystem
+        clean_domain = "".join(c for c in domain if c.isalnum() or c in (' ', '-', '_')).strip()
+        clean_domain = clean_domain.replace(' ', '_')
+        
+        base_dir = 'output_test' if self.test_mode else 'output'
+        domain_dir = f'{base_dir}/{clean_domain}'
+        
+        if category:
+            return f'{domain_dir}/{category}'
+        return domain_dir
     
     def _load_ai_settings(self) -> Dict[str, Any]:
         """Load AI model settings"""

@@ -16,10 +16,11 @@ class VideoAssembler:
     Assembles final videos by combining AI presenter videos with background images
     """
     
-    def __init__(self):
+    def __init__(self, domain: str = None):
         """Initialize video assembler"""
         self.output_resolution = (1920, 1080)  # Full HD
         self.fps = 30
+        self.domain = domain
     
     def compose_final_video(self, presenter_video: str, background_image: str, 
                            lesson_title: str, lesson_number: int) -> str:
@@ -177,7 +178,12 @@ class VideoAssembler:
             filename = f"lesson_{lesson_number:02d}_{safe_title}_final.mp4"
             
             # Create output directory
-            output_dir = "output/videos/final"
+            if self.domain:
+                clean_domain = "".join(c for c in self.domain if c.isalnum() or c in (' ', '-', '_')).strip()
+                clean_domain = clean_domain.replace(' ', '_')
+                output_dir = f"output/{clean_domain}/videos/final"
+            else:
+                output_dir = "output/videos/final"
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, filename)
             

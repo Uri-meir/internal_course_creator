@@ -9,7 +9,7 @@ import requests
 import json
 import logging
 from typing import Dict, List, Any, Optional
-from mocks.mock_clients import MockDIDClient, create_mock_video_file
+from mocks.mock_clients import MockDIDClient
 
 logger = logging.getLogger(__name__)
 
@@ -18,22 +18,35 @@ class AIPresenter:
     Generates AI presenter videos using D-ID API
     """
     
-    def __init__(self, did_api_key: str, test_mode: bool = False):
+    def __init__(self, did_api_key: str, test_mode: bool = False, domain: str = None):
         """Initialize with D-ID API key and test mode flag"""
         self.test_mode = test_mode
         self.did_api_key = did_api_key
+        self.domain = domain
         
         if self.test_mode:
             logger.info("Using mock D-ID client for testing")
-            self.client = MockDIDClient(did_api_key)
+            # We'll set the base_dir after it's calculated below
+            self.client = None
         else:
             self.client = None  # Will use requests directly for D-ID API
         
-        # D-ID API configuration
+        # Validate API key format
+        if not self.test_mode and did_api_key:
+            if ':' in did_api_key:
+                logger.info("D-ID API key contains ':' - this is correct for Basic auth (username:password format)")
+            if len(did_api_key) < 20:
+                logger.warning("D-ID API key seems too short - expected format is username:password or base64 encoded key")
+        
+        # D-ID API configuration - use the official studio API
         self.api_url = "https://api.d-id.com"
+        self.api_endpoints = [
+            "https://api.d-id.com/talks",  # Main endpoint
+        ]
         self.headers = {
             "Authorization": f"Basic {did_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/json"
         }
         
         # Presenter configuration
@@ -41,8 +54,22 @@ class AIPresenter:
         self.voice_id = "en-US-JennyNeural"  # Natural English voice
         self.video_quality = "draft"  # draft, 720p, 1080p
         
+        # Presenter image URL (use D-ID public image that works reliably)
+        self.presenter_image_url = "https://d-id-public-bucket.s3.amazonaws.com/alice.jpg"
+        
         # Output configuration
-        self.base_dir = 'output_test' if self.test_mode else 'output'
+        base_dir = 'output_test' if self.test_mode else 'output'
+        if self.domain:
+            # Clean domain name for filesystem
+            clean_domain = "".join(c for c in self.domain if c.isalnum() or c in (' ', '-', '_')).strip()
+            clean_domain = clean_domain.replace(' ', '_')
+            self.base_dir = f'{base_dir}/{clean_domain}'
+        else:
+            self.base_dir = base_dir
+        
+        # Initialize mock client with base_dir if in test mode
+        if self.test_mode:
+            self.client = MockDIDClient(did_api_key, self.base_dir)
     
     def create_presenter_video(self, script_text: str, lesson_title: str = "", 
                               lesson_number: int = 1) -> str:
@@ -82,34 +109,81 @@ class AIPresenter:
         """Create video using D-ID API"""
         
         try:
-            # Prepare request payload
+            # Check if we have a valid API key
+            if not self.did_api_key or self.did_api_key == 'your_did_api_key_here':
+                logger.error("D-ID API key not configured. Please set DID_API_KEY in your .env file")
+                logger.error("Get your API key from: https://studio.d-id.com/account-settings")
+                raise Exception("D-ID API key not configured")
+            
+            # Prepare request payload - use format that works with D-ID API
             payload = {
+                "source_url": self.presenter_image_url,
                 "script": {
                     "type": "text",
-                    "input": script_text,
-                    "provider": {
-                        "type": "microsoft",
-                        "voice_id": self.voice_id
-                    }
-                },
-                "config": {
-                    "fluent": True,
-                    "pad_audio": 0.2
-                },
-                "source_url": f"d-id://talks/{self.presenter_id}",
-                "presenter_id": self.presenter_id
+                    "input": script_text
+                }
             }
             
-            # Create video request
-            response = requests.post(
-                f"{self.api_url}/talks",
-                headers=self.headers,
-                json=payload
-            )
+            # Try multiple endpoints and authentication methods
+            response = None
+            last_error = None
             
-            if response.status_code != 201:
+            for endpoint in self.api_endpoints:
+                logger.info(f"Trying D-ID API endpoint: {endpoint}")
+                logger.info(f"Headers: {self.headers}")
+                logger.info(f"Payload: {payload}")
+                
+                try:
+                    # Create video request
+                    response = requests.post(
+                        endpoint,
+                        headers=self.headers,
+                        json=payload,
+                        timeout=30
+                    )
+                    
+                    logger.info(f"D-ID API response status: {response.status_code}")
+                    logger.info(f"D-ID API response headers: {dict(response.headers)}")
+                    logger.info(f"D-ID API response body: {response.text}")
+                    
+                    # If successful, break out of loop
+                    if response.status_code == 201:
+                        logger.info(f"✅ Success with endpoint: {endpoint}")
+                        break
+                    elif response.status_code == 500 and "circular structure" in response.text:
+                        logger.warning(f"⚠️  Endpoint {endpoint} has server-side bug, trying next...")
+                        last_error = f"Server bug at {endpoint}"
+                        continue
+                    elif response.status_code in [401, 403]:
+                        logger.warning(f"🔒 Authentication failed at {endpoint}, trying next...")
+                        last_error = f"Auth failed at {endpoint}"
+                        continue
+                    else:
+                        # Other error, but still try next endpoint
+                        logger.warning(f"⚠️  Unexpected error {response.status_code} at {endpoint}, trying next...")
+                        last_error = f"Error {response.status_code} at {endpoint}"
+                        continue
+                        
+                except requests.exceptions.RequestException as e:
+                    logger.warning(f"🔌 Request failed for {endpoint}: {str(e)}")
+                    last_error = f"Request failed for {endpoint}: {str(e)}"
+                    continue
+            
+            # If we get here, check if we have a valid response
+            if not response or response.status_code != 201:
+                if last_error:
+                    logger.error(f"All D-ID endpoints failed. Last error: {last_error}")
+                else:
+                    logger.error("All D-ID endpoints failed with unknown errors")
+            
+            if response.status_code == 401:
+                logger.error("D-ID API authentication failed. Please check your API key.")
+                logger.error("Get your API key from: https://studio.d-id.com/account-settings")
+                logger.error("The API key should be in username:password format for Basic auth")
+                raise Exception("D-ID API authentication failed - check your API key")
+            elif response.status_code != 201:
                 logger.error(f"D-ID API error: {response.status_code} - {response.text}")
-                raise Exception(f"D-ID API error: {response.status_code}")
+                raise Exception(f"D-ID API error: {response.status_code} - {response.text}")
             
             # Get video ID from response
             video_data = response.json()
@@ -261,23 +335,25 @@ class AIPresenter:
             os.makedirs(output_dir, exist_ok=True)
             
             # Create filename
-            filename = f"lesson_{lesson_number:02d}_{lesson_title.replace(' ', '_')}_fallback.mp4"
+            safe_title = "".join(c for c in lesson_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_title = safe_title.replace(' ', '_')
+            filename = f"lesson_{lesson_number:02d}_{safe_title}_fallback.mp4"
             output_path = os.path.join(output_dir, filename)
             
-            # Try to create a simple colored video with text using ffmpeg
+            logger.info(f"Creating fallback video: {output_path}")
+            
+            # Method 1: Try using ffmpeg if available (most reliable)
             try:
                 import subprocess
                 
-                # Create a simple colored video with text using ffmpeg
+                # Create a simple colored video with text
                 cmd = [
-                    'ffmpeg', '-f', 'lavfi', '-i', 'color=c=0x6496FF:size=640x480:duration=10',
-                    '-vf', f'drawtext=text=\'Lesson {lesson_number}\\n{lesson_title}\':fontsize=40:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2',
-                    '-c:v', 'libx264', '-preset', 'ultrafast', '-t', '10',
-                    '-y',  # Overwrite output file
-                    output_path
+                    'ffmpeg', '-f', 'lavfi', '-i', 'color=c=0x6496FF:size=640x480:duration=5',
+                    '-vf', f'drawtext=text=\'Lesson {lesson_number}\\n{lesson_title[:30]}\':fontsize=32:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2',
+                    '-c:v', 'libx264', '-preset', 'ultrafast', '-t', '5',
+                    '-y', output_path
                 ]
                 
-                # Run ffmpeg command
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 
                 if result.returncode == 0:
@@ -285,18 +361,112 @@ class AIPresenter:
                     return output_path
                 else:
                     logger.warning(f"FFmpeg fallback failed: {result.stderr}")
-                    # Continue to file creation fallback
                     
-            except (ImportError, FileNotFoundError, subprocess.SubprocessError):
+            except (FileNotFoundError, subprocess.SubprocessError):
                 logger.info("FFmpeg not available for fallback video")
-                # Continue to file creation fallback
             
-            # Final fallback: create an empty file
-            with open(output_path, 'w') as f:
-                f.write("Fallback video file")
+            # Method 2: Try using PIL + moviepy
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                import numpy as np
+                
+                # Create a simple image frame
+                width, height = 640, 480
+                img = Image.new('RGB', (width, height), color=(100, 150, 255))
+                draw = ImageDraw.Draw(img)
+                
+                # Try to use a font, fallback to default if not available
+                try:
+                    font = ImageFont.truetype("Arial.ttf", 32)
+                except:
+                    font = ImageFont.load_default()
+                
+                # Add text to the image
+                text = f"Lesson {lesson_number}\n{lesson_title[:30]}..."
+                bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                x = (width - text_width) // 2
+                y = (height - text_height) // 2
+                
+                draw.text((x, y), text, fill=(255, 255, 255), font=font)
+                
+                # Convert to numpy array
+                frame = np.array(img)
+                
+                # Create a simple video using moviepy
+                try:
+                    from moviepy.editor import ImageClip
+                    
+                    # Create a clip from the image
+                    clip = ImageClip(frame, duration=5)
+                    
+                    # Write the video
+                    clip.write_videofile(
+                        output_path,
+                        fps=24,
+                        codec='libx264',
+                        audio=False,
+                        verbose=False,
+                        logger=None
+                    )
+                    
+                    logger.info(f"Fallback video created with moviepy: {output_path}")
+                    return output_path
+                    
+                except Exception as moviepy_error:
+                    logger.warning(f"MoviePy fallback failed: {moviepy_error}")
+                    
+            except ImportError:
+                logger.info("PIL/moviepy not available for fallback video")
             
-            logger.info(f"Fallback video file created: {output_path}")
-            return output_path
+            # Method 3: Create a simple image file as fallback
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                
+                # Create a simple image
+                width, height = 640, 480
+                img = Image.new('RGB', (width, height), color=(100, 150, 255))
+                draw = ImageDraw.Draw(img)
+                
+                # Try to use a font, fallback to default if not available
+                try:
+                    font = ImageFont.truetype("Arial.ttf", 32)
+                except:
+                    font = ImageFont.load_default()
+                
+                # Add text to the image
+                text = f"Lesson {lesson_number}\n{lesson_title[:30]}..."
+                bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                x = (width - text_width) // 2
+                y = (height - text_height) // 2
+                
+                draw.text((x, y), text, fill=(255, 255, 255), font=font)
+                
+                # Save as PNG
+                png_path = output_path.replace('.mp4', '.png')
+                img.save(png_path, 'PNG')
+                
+                logger.info(f"Fallback image created: {png_path}")
+                return png_path
+                
+            except ImportError:
+                logger.info("PIL not available for fallback image")
+            
+            # Ultimate fallback: create a text file
+            logger.warning("All fallback methods failed, creating text file")
+            txt_path = output_path.replace('.mp4', '.txt')
+            with open(txt_path, 'w') as f:
+                f.write(f"Fallback file for lesson {lesson_number}: {lesson_title}\n")
+                f.write("D-ID API is not working. Please check your API key.\n")
+                f.write("Get your API key from: https://studio.d-id.com/account-settings\n")
+            
+            logger.info(f"Fallback text file created: {txt_path}")
+            return txt_path
             
         except Exception as e:
             logger.error(f"Error creating fallback video: {str(e)}")

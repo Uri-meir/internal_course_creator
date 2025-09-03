@@ -22,9 +22,10 @@ class BackgroundGenerator:
     Generates visual backgrounds and course graphics using DALL-E and PIL
     """
     
-    def __init__(self, openai_api_key: str, test_mode: bool = False):
+    def __init__(self, openai_api_key: str, test_mode: bool = False, domain: str = None):
         """Initialize with OpenAI API key for DALL-E and test mode flag"""
         self.test_mode = test_mode
+        self.domain = domain
         
         if self.test_mode:
             logger.info("Using mock OpenAI client for testing")
@@ -133,7 +134,13 @@ class BackgroundGenerator:
             filename = f"bg_{safe_topic}_{safe_title}.png"
             
             # Create output directory
-            output_dir = "output/backgrounds/generated"
+            base_dir = "output/backgrounds/generated"
+            if self.domain:
+                clean_domain = "".join(c for c in self.domain if c.isalnum() or c in (' ', '-', '_')).strip()
+                clean_domain = clean_domain.replace(' ', '_')
+                output_dir = f"output/{clean_domain}/backgrounds/generated"
+            else:
+                output_dir = base_dir
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, filename)
             
@@ -255,7 +262,12 @@ class BackgroundGenerator:
             
             # Save thumbnail
             filename = "course_thumbnail.png"
-            output_dir = "output/marketing"
+            if self.domain:
+                clean_domain = "".join(c for c in self.domain if c.isalnum() or c in (' ', '-', '_')).strip()
+                clean_domain = clean_domain.replace(' ', '_')
+                output_dir = f"output/{clean_domain}/marketing"
+            else:
+                output_dir = "output/marketing"
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, filename)
             
@@ -295,7 +307,12 @@ class BackgroundGenerator:
             
             # Save fallback
             filename = f"fallback_{topic}_{lesson_title}.png"
-            output_dir = "output/backgrounds/fallback"
+            if self.domain:
+                clean_domain = "".join(c for c in self.domain if c.isalnum() or c in (' ', '-', '_')).strip()
+                clean_domain = clean_domain.replace(' ', '_')
+                output_dir = f"output/{clean_domain}/backgrounds/fallback"
+            else:
+                output_dir = "output/backgrounds/fallback"
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(output_dir, filename)
             
@@ -305,7 +322,12 @@ class BackgroundGenerator:
         except Exception as e:
             logger.error(f"Error creating fallback background: {str(e)}")
             # Return a simple path
-            return "output/backgrounds/fallback/simple_background.png"
+            if self.domain:
+                clean_domain = "".join(c for c in self.domain if c.isalnum() or c in (' ', '-', '_')).strip()
+                clean_domain = clean_domain.replace(' ', '_')
+                return f"output/{clean_domain}/backgrounds/fallback/simple_background.png"
+            else:
+                return "output/backgrounds/fallback/simple_background.png"
     
     def _create_simple_thumbnail(self, course_title: str) -> str:
         """Create simple thumbnail if main creation fails"""

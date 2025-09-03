@@ -267,15 +267,16 @@ class MockImageGenerator:
 class MockDIDClient:
     """Mock D-ID client for testing"""
     
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, base_dir: str = None):
         """Initialize mock client"""
         self.api_key = api_key
+        self.base_dir = base_dir or "output_test"
     
     def create_video(self, script_text: str, lesson_title: str, lesson_number: int) -> str:
         """Mock video creation"""
         
         # Create mock video file
-        video_path = create_mock_video_file(lesson_title, lesson_number)
+        video_path = create_mock_video_file(lesson_title, lesson_number, self.base_dir)
         
         return video_path
 
@@ -334,12 +335,12 @@ def create_mock_image_file(topic: str, title: str) -> str:
         logger.error(f"Error creating mock image: {str(e)}")
         return "mock_image.png"
 
-def create_mock_video_file(title: str, lesson_number: int) -> str:
+def create_mock_video_file(title: str, lesson_number: int, base_dir: str = "output_test") -> str:
     """Create a mock video file for testing"""
     
     try:
         # Create output directory
-        output_dir = "output_test/videos/presenter"
+        output_dir = f"{base_dir}/videos/presenter"
         os.makedirs(output_dir, exist_ok=True)
         
         # Create safe filename
@@ -348,35 +349,204 @@ def create_mock_video_file(title: str, lesson_number: int) -> str:
         filename = f"lesson_{lesson_number:02d}_{safe_title}_presenter.mp4"
         output_path = os.path.join(output_dir, filename)
         
-        # Create a simple mock video file using ffmpeg (more reliable than moviepy)
+        # Try multiple methods to create a playable video file
+        
+        # Method 1: Try using PIL + moviepy to create a simple video
         try:
-            # Create a simple video with ffmpeg
+            from PIL import Image, ImageDraw, ImageFont
+            import numpy as np
+            
+            # Create a simple image frame
+            width, height = 640, 480
+            img = Image.new('RGB', (width, height), color=(100, 150, 255))
+            draw = ImageDraw.Draw(img)
+            
+            # Try to use a font, fallback to default if not available
+            try:
+                font = ImageFont.truetype("Arial.ttf", 32)
+            except:
+                font = ImageFont.load_default()
+            
+            # Add text to the image
+            text = f"Lesson {lesson_number}\n{title[:30]}..."
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            x = (width - text_width) // 2
+            y = (height - text_height) // 2
+            
+            draw.text((x, y), text, fill=(255, 255, 255), font=font)
+            
+            # Convert to numpy array
+            frame = np.array(img)
+            
+            # Create a simple video using moviepy
+            try:
+                from moviepy.editor import ImageClip, concatenate_videoclips
+                
+                # Create a clip from the image
+                clip = ImageClip(frame, duration=5)
+                
+                # Create a simple animation by scaling
+                clip = clip.resize(lambda t: 1 + 0.1 * np.sin(t))
+                
+                # Write the video
+                clip.write_videofile(
+                    output_path,
+                    fps=24,
+                    codec='libx264',
+                    audio=False,
+                    verbose=False,
+                    logger=None
+                )
+                
+                logger.info(f"Mock video created with moviepy: {output_path}")
+                return output_path
+                
+            except Exception as moviepy_error:
+                logger.warning(f"MoviePy failed: {moviepy_error}")
+                # Continue to next method
+                
+        except ImportError:
+            logger.info("PIL not available, trying next method")
+        
+        # Method 2: Try using ffmpeg if available
+        try:
             cmd = [
-                'ffmpeg', '-f', 'lavfi', '-i', 'color=c=0x6496FF:size=640x480:duration=15',
-                '-vf', f'drawtext=text=\'Lesson {lesson_number}\\n{title}\':fontsize=40:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2',
-                '-c:v', 'libx264', '-preset', 'ultrafast', '-t', '15',
-                '-y',  # Overwrite output file
-                output_path
+                'ffmpeg', '-f', 'lavfi', '-i', 'color=c=0x6496FF:size=640x480:duration=5',
+                '-vf', f'drawtext=text=\'Lesson {lesson_number}\\n{title[:30]}\':fontsize=32:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2',
+                '-c:v', 'libx264', '-preset', 'ultrafast', '-t', '5',
+                '-y', output_path
             ]
             
-            # Run ffmpeg command
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
                 logger.info(f"Mock video created with ffmpeg: {output_path}")
                 return output_path
             else:
-                logger.warning(f"FFmpeg failed, creating empty file: {result.stderr}")
-                # Fallback: create empty file
-                with open(output_path, 'w') as f:
-                    f.write("Mock video file")
+                logger.warning(f"FFmpeg failed: {result.stderr}")
+                
+        except (FileNotFoundError, subprocess.SubprocessError):
+            logger.info("FFmpeg not available")
+        
+                    # Method 3: Create a simple image sequence and convert to video
+            try:
+                from PIL import Image, ImageDraw, ImageFont
+                import numpy as np
+                
+                # Create a simple colored image
+                width, height = 640, 480
+                img = Image.new('RGB', (width, height), color=(100, 150, 255))
+                draw = ImageDraw.Draw(img)
+                
+                # Try to use a font, fallback to default if not available
+                try:
+                    font = ImageFont.truetype("Arial.ttf", 32)
+                except:
+                    font = ImageFont.load_default()
+                
+                # Add text to the image
+                text = f"Lesson {lesson_number}\n{title[:30]}..."
+                bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                x = (width - text_width) // 2
+                y = (height - text_height) // 2
+                
+                draw.text((x, y), text, fill=(255, 255, 255), font=font)
+                
+                # Save as PNG first
+                temp_png = output_path.replace('.mp4', '_temp.png')
+                img.save(temp_png, 'PNG')
+                
+                # Try to convert PNG to MP4 using ffmpeg
+                try:
+                    cmd = [
+                        'ffmpeg', '-loop', '1', '-i', temp_png,
+                        '-c:v', 'libx264', '-t', '5', '-pix_fmt', 'yuv420p',
+                        '-vf', 'scale=640:480', '-y', output_path
+                    ]
+                    
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        # Clean up temp file
+                        os.remove(temp_png)
+                        logger.info(f"PNG to MP4 mock video created: {output_path}")
+                        return output_path
+                    else:
+                        logger.warning(f"PNG to MP4 conversion failed: {result.stderr}")
+                        # Clean up temp file
+                        os.remove(temp_png)
+                        
+                except (FileNotFoundError, subprocess.SubprocessError):
+                    logger.info("FFmpeg not available for PNG to MP4 conversion")
+                    # Clean up temp file
+                    os.remove(temp_png)
+                
+            except Exception as e:
+                logger.warning(f"PNG to MP4 creation failed: {e}")
+        
+                    # Final fallback: create a proper video file using OpenCV (if available)
+            try:
+                import cv2
+                import numpy as np
+                
+                # Create a simple video with OpenCV
+                width, height = 640, 480
+                fps = 24
+                duration = 5  # 5 seconds
+                total_frames = fps * duration
+                
+                # Create video writer
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+                
+                # Create frames
+                for frame_num in range(total_frames):
+                    # Create a colored frame
+                    frame = np.zeros((height, width, 3), dtype=np.uint8)
+                    frame[:, :] = [100, 150, 255]  # Blue color
+                    
+                    # Add text
+                    text = f"Lesson {lesson_number}\n{title[:30]}..."
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 1
+                    thickness = 2
+                    color = (255, 255, 255)
+                    
+                    # Get text size
+                    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+                    
+                    # Center text
+                    x = (width - text_width) // 2
+                    y = (height + text_height) // 2
+                    
+                    # Add text to frame
+                    cv2.putText(frame, text, (x, y), font, font_scale, color, thickness)
+                    
+                    # Write frame
+                    out.write(frame)
+                
+                # Release video writer
+                out.release()
+                
+                logger.info(f"OpenCV mock video created: {output_path}")
                 return output_path
                 
-        except (ImportError, FileNotFoundError, subprocess.SubprocessError):
-            # Fallback: create empty file
-            logger.info("FFmpeg not available, creating empty mock video file")
+            except ImportError:
+                logger.info("OpenCV not available")
+            except Exception as e:
+                logger.warning(f"OpenCV video creation failed: {e}")
+            
+            # Ultimate fallback: create a text file with .mp4 extension (not playable but won't crash)
+            logger.warning("All video creation methods failed, creating fallback file")
             with open(output_path, 'w') as f:
-                f.write("Mock video file")
+                f.write(f"Mock video file for lesson {lesson_number}: {title}")
+            
             return output_path
         
     except Exception as e:

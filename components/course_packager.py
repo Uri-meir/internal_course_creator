@@ -19,9 +19,14 @@ class CoursePackager:
     Assembles complete course package ready for platform upload
     """
     
-    def __init__(self, output_dir: str = "output"):
+    def __init__(self, output_dir: str = "output", domain: str = None):
         """Initialize course packager"""
-        self.output_dir = Path(output_dir)
+        if domain:
+            clean_domain = "".join(c for c in domain if c.isalnum() or c in (' ', '-', '_')).strip()
+            clean_domain = clean_domain.replace(' ', '_')
+            self.output_dir = Path(f"{output_dir}/{clean_domain}")
+        else:
+            self.output_dir = Path(output_dir)
         self.package_structure = self._define_package_structure()
         self.metadata_template = self._load_metadata_template()
     
