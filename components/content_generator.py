@@ -130,53 +130,99 @@ class ContentGenerator:
         """Generate hands-on lesson content"""
         
         prompt = f"""
-        You are an expert teacher creating a hands-on coding lesson about: "{title}"
+        You are an expert programming instructor. Create comprehensive hands-on lesson content about: "{title}"
         Duration: {duration} minutes
         
-        CRITICAL REQUIREMENTS:
-        1. This lesson MUST be about "{title}" specifically, not generic programming exercises
-        2. Create a fun, engaging project that teaches "{title}" through doing
-        3. Use analogies and stories to explain concepts before coding
-        4. Make the code examples specific to "{title}"
-        5. Include real-world scenarios where this knowledge is useful
+        REQUIREMENTS:
+        1. Make this about "{title}" specifically with real-world applications
+        2. Include detailed code examples with explanations
+        3. Create comprehensive exercises with full solutions
+        4. Focus on professional-level content, not beginner basics
+        5. Include practical applications and best practices
         
-        TEACHING APPROACH:
-        - Start with a fun story or scenario that needs solving
-        - Explain the concept using analogies
-        - Show the code step-by-step with explanations
-        - Include fun challenges and experiments
-        - Make it feel like building something cool, not just learning syntax
-        
-        Create a hands-on lesson about "{title}" that includes:
+        Create detailed lesson content about "{title}" with this structure:
         
         {{
-            "introduction": "A fun story or scenario that introduces why we need to learn about {title}",
-            "concept_explanation": "Explain {title} using a simple analogy that makes it click",
-            "project_overview": "What we're going to build together in this lesson about {title}",
-            "setup_instructions": "Step-by-step setup for our {title} project",
+            "introduction": "A compelling introduction to {title} with real-world examples and professional use cases (minimum 200 words)",
+            "concept_explanation": "Deep technical explanation of {title} concepts and principles (minimum 300 words)",
+            "project_overview": "Description of a practical project we will build using {title} (minimum 150 words)",
+            "setup_instructions": "Step-by-step setup instructions for the {title} development environment",
             "code_examples": [
                 {{
-                    "title": "Building our first {title} component",
-                    "description": "What this code does and why it's important for {title}",
-                    "code": "Complete, runnable code that demonstrates {title}",
-                    "explanation": "Line-by-line explanation of how this code works with {title}",
-                    "expected_output": "What students should see when they run this {title} code"
+                    "title": "Core {title} Implementation",
+                    "description": "Production-ready implementation of core {title} functionality with error handling, logging, and optimization.",
+                    "code": "Complete, professional-grade code (minimum 30 lines) that demonstrates advanced {title} patterns with proper error handling, logging, type hints, and documentation.",
+                    "explanation": "Detailed line-by-line explanation covering design decisions, performance considerations, error handling strategies, and integration patterns.",
+                    "expected_output": "Specific output showing successful execution with logging and error handling demonstration.",
+                    "best_practices": "Key professional practices demonstrated in this code including SOLID principles, error handling, and performance optimization."
                 }},
                 {{
-                    "title": "Adding more {title} features",
-                    "description": "How to extend our {title} project with additional functionality",
-                    "code": "Code that builds upon the first example for {title}",
-                    "explanation": "How this code enhances our {title} project",
-                    "expected_output": "What the enhanced {title} project should do"
+                    "title": "Advanced {title} Integration",
+                    "description": "Complex integration example showing how {title} works with other technologies and frameworks in production environments.",
+                    "code": "Advanced code (minimum 40 lines) showing integration patterns, async operations, database connections, API interactions, or similar professional scenarios.",
+                    "explanation": "Comprehensive explanation of integration patterns, architectural decisions, scalability considerations, and production deployment strategies.",
+                    "expected_output": "Detailed output showing successful integration with external systems, performance metrics, and monitoring data.",
+                    "architecture_notes": "Explanation of how this fits into microservices, distributed systems, or enterprise architecture patterns."
+                }},
+                {{
+                    "title": "Performance Optimization and Debugging",
+                    "description": "Advanced techniques for optimizing {title} performance and debugging complex issues.",
+                    "code": "Sophisticated code (minimum 35 lines) demonstrating profiling, optimization techniques, caching strategies, and debugging approaches.",
+                    "explanation": "Deep dive into performance analysis, bottleneck identification, optimization strategies, and debugging methodologies.",
+                    "expected_output": "Performance benchmarks, profiling results, and before/after optimization comparisons.",
+                    "optimization_techniques": "Specific optimization patterns, caching strategies, and performance monitoring approaches."
                 }}
             ],
             "hands_on_exercises": [
                 {{
-                    "title": "Customize your {title} project",
-                    "description": "A fun challenge to make the {title} project your own",
-                    "hints": ["Think about what would make your {title} project unique", "Experiment with different approaches"],
-                    "solution": "One possible solution with explanations",
-                    "learning_outcome": "What students will understand about {title} after this exercise"
+                    "title": "Professional {title} Implementation",
+                    "description": "Build a production-ready implementation with error handling and best practices",
+                    "difficulty": "Medium",
+                    "learning_outcome": "Master professional-grade {title} development practices",
+                    "starter_code": "# Professional implementation starter code here",
+                    "solution": "Complete professional solution with detailed implementation (minimum 50 lines of code)",
+                    "solution_explanation": "Comprehensive explanation of the solution approach and key concepts",
+                    "key_concepts": ["Professional patterns", "Error handling", "Best practices", "Testing"]
+                }},
+                {{
+                    "title": "Advanced {title} Architecture",
+                    "description": "Design and implement an enterprise-grade scalable system",
+                    "difficulty": "Hard", 
+                    "learning_outcome": "Master enterprise architecture patterns and scalability",
+                    "starter_code": "# Enterprise architecture starter code here",
+                    "solution": "Complete enterprise solution with microservices and monitoring (minimum 100 lines)",
+                    "solution_explanation": "Detailed explanation of architecture decisions and scalability patterns",
+                    "key_concepts": ["Microservices", "Scalability", "Monitoring", "Security"]
+                }},
+                {{
+                    "title": "Real-World Industry Application",
+                    "description": "Apply {title} to solve a specific industry problem with compliance requirements",
+                    "difficulty": "Hard",
+                    "learning_outcome": "Apply {title} to real business challenges with regulatory compliance", 
+                    "starter_code": "# Industry-specific implementation starter code here",
+                    "solution": "Complete industry solution with compliance and security (minimum 80 lines)",
+                    "solution_explanation": "Explanation of industry requirements and compliance considerations",
+                    "key_concepts": ["Industry compliance", "Security", "Audit logging", "Data protection"]
+                }},
+                {{
+                    "title": "Performance Optimization Challenge",
+                    "description": "Debug and optimize a complex system for enterprise performance",
+                    "difficulty": "Expert",
+                    "learning_outcome": "Master debugging and performance optimization techniques",
+                    "starter_code": "# Performance optimization challenge code here",
+                    "solution": "Optimized solution with debugging and monitoring (minimum 120 lines)",
+                    "solution_explanation": "Comprehensive debugging methodology and optimization strategies",
+                    "key_concepts": ["Performance profiling", "Debugging", "Monitoring", "Optimization"]
+                }},
+                {{
+                    "title": "Innovation Project",
+                    "description": "Create an innovative solution integrating emerging technologies",
+                    "difficulty": "Expert", 
+                    "learning_outcome": "Demonstrate mastery through innovative technology integration",
+                    "starter_code": "# Innovation project starter code here",
+                    "solution": "Revolutionary solution with emerging tech integration (minimum 150 lines)",
+                    "solution_explanation": "Innovation approach and future technology integration strategies",
+                    "key_concepts": ["Emerging technologies", "Innovation", "Future-proofing", "Research"]
                 }}
             ],
             "troubleshooting": "Common issues students might face with {title} and how to solve them",
@@ -185,20 +231,74 @@ class ContentGenerator:
             "fun_challenge": "A bonus challenge that pushes students to think creatively about {title}"
         }}
         
-        REMEMBER: This lesson is specifically about "{title}". Make it fun, engaging, and focused on building real skills!
+        REMEMBER: This lesson is specifically about "{title}". Make it comprehensive, professional, and focused on building real-world skills!
+        
+        IMPORTANT: Return ONLY valid JSON. No extra text, no markdown formatting, no code blocks. Just pure JSON that can be parsed directly.
         """
         
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000,
+                max_tokens=3000,  # Increased for comprehensive content
                 temperature=0.7
             )
             
             content = response.choices[0].message.content
-            return json.loads(content)
+            logger.info(f"Raw OpenAI response length: {len(content)} characters")
             
+            # Clean the content before parsing
+            content = content.strip()
+            if content.startswith('```json'):
+                content = content[7:]  # Remove ```json
+            if content.endswith('```'):
+                content = content[:-3]  # Remove ```
+            content = content.strip()
+            
+            # Clean and fix JSON formatting issues
+            import re
+            
+            # Remove problematic control characters first
+            content = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', content)
+            
+            # Fix unescaped quotes within JSON strings
+            # This is a simple approach - replace problematic quotes
+            content = content.replace('\\"', '"')  # Remove escaping first
+            
+            # Fix newlines and tabs within JSON strings
+            lines = content.split('\n')
+            fixed_lines = []
+            inside_string = False
+            
+            for line in lines:
+                if inside_string:
+                    # We're inside a multi-line string, escape it properly
+                    line = line.replace('"', '\\"').replace('\t', '\\t')
+                    line = line.rstrip() + '\\n'
+                    
+                # Count quotes to determine if we're inside a string
+                quote_count = line.count('"') - line.count('\\"')
+                if quote_count % 2 == 1:
+                    inside_string = not inside_string
+                    
+                fixed_lines.append(line)
+            
+            content = '\n'.join(fixed_lines)
+            
+            # Final cleanup of any remaining issues
+            content = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', content)
+            
+            # Log first 200 chars for debugging
+            logger.info(f"Cleaned content sample: {content[:200]}...")
+            
+            parsed_content = json.loads(content)
+            logger.info("Successfully parsed OpenAI response as JSON")
+            return parsed_content
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {str(e)}")
+            logger.error(f"Raw content: {content[:500]}...")
+            return self._create_fallback_hands_on_content(title)
         except Exception as e:
             logger.error(f"Error generating hands-on content: {str(e)}")
             return self._create_fallback_hands_on_content(title)

@@ -120,7 +120,8 @@ class AIPresenter:
                 "source_url": self.presenter_image_url,
                 "script": {
                     "type": "text",
-                    "input": script_text
+                    "input": script_text,
+                    "subtitles": True  # Enable subtitle generation (must be in script object)
                 }
             }
             
@@ -230,10 +231,23 @@ class AIPresenter:
                 logger.info(f"Video status: {status}")
                 
                 if status == 'done':
-                    # Video is ready, download it
+                    # Video is ready, download it and embed subtitles if available
                     video_url = status_data.get('result_url')
+                    subtitles_url = status_data.get('subtitles_url')
+                    subtitles_enabled = status_data.get('subtitles', False)
+                    
                     if video_url:
-                        return self._download_video(video_url, lesson_title, lesson_number)
+                        # Download the base video
+                        video_path = self._download_video(video_url, lesson_title, lesson_number)
+                        
+                        # If subtitles are available, embed them into the video
+                        if subtitles_enabled and subtitles_url:
+                            logger.info("✅ Embedding subtitles into video...")
+                            final_video_path = self._embed_subtitles(video_path, subtitles_url, lesson_title, lesson_number)
+                            return final_video_path
+                        else:
+                            logger.info("Video generated without subtitles")
+                            return video_path
                     else:
                         raise Exception("No video URL in completed response")
                 
@@ -251,6 +265,177 @@ class AIPresenter:
         except Exception as e:
             logger.error(f"Error waiting for video completion: {str(e)}")
             raise
+    
+    def _embed_subtitles(self, video_path: str, subtitles_url: str, lesson_title: str, lesson_number: int) -> str:
+        """Embed subtitles into video using OpenCV (no ImageMagick dependency)"""
+        
+        try:
+            import cv2
+            import numpy as np
+            
+            # Download SRT file
+            logger.info(f"Downloading subtitles from: {subtitles_url}")
+            srt_response = requests.get(subtitles_url)
+            srt_response.raise_for_status()
+            
+            srt_content = srt_response.text
+            logger.info(f"SRT content received ({len(srt_content)} characters)")
+            
+            # Parse SRT content
+            subtitle_segments = self._parse_srt_content(srt_content)
+            logger.info(f"Parsed {len(subtitle_segments)} subtitle segments")
+            
+            if not subtitle_segments:
+                logger.warning("No subtitle segments found, returning original video")
+                return video_path
+            
+            # Create output path for video with embedded subtitles
+            output_path = video_path.replace('.mp4', '_with_subtitles.mp4')
+            
+            # Process video with OpenCV
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                logger.error(f"Could not open video file: {video_path}")
+                return video_path
+            
+            # Get video properties
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            logger.info(f"Video properties: {width}x{height}, {fps} FPS, {total_frames} frames")
+            
+            # Create video writer
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            
+            frame_count = 0
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                # Calculate current time in seconds
+                current_time = frame_count / fps
+                
+                # Find active subtitle for current time
+                active_subtitle = None
+                for segment in subtitle_segments:
+                    if segment['start'] <= current_time <= segment['end']:
+                        active_subtitle = segment['text']
+                        break
+                
+                # Add subtitle text to frame if available
+                if active_subtitle:
+                    frame = self._add_subtitle_to_frame(frame, active_subtitle, width, height)
+                
+                out.write(frame)
+                frame_count += 1
+                
+                # Progress logging every 5 seconds
+                if frame_count % (fps * 5) == 0:
+                    progress = (frame_count / total_frames) * 100
+                    logger.info(f"Processing subtitles: {progress:.1f}% complete")
+            
+            # Clean up
+            cap.release()
+            out.release()
+            cv2.destroyAllWindows()
+            
+            # Remove original video without subtitles
+            if os.path.exists(video_path):
+                os.remove(video_path)
+            
+            logger.info(f"✅ Video with embedded subtitles created: {output_path}")
+            return output_path
+            
+        except ImportError:
+            logger.error("OpenCV not available, cannot embed subtitles")
+            logger.info("Install with: pip install opencv-python")
+            return video_path
+        except Exception as e:
+            logger.error(f"Error embedding subtitles: {str(e)}")
+            logger.warning("Falling back to video without embedded subtitles")
+            return video_path
+    
+    def _parse_srt_content(self, srt_content: str) -> list:
+        """Parse SRT content into subtitle segments"""
+        
+        segments = []
+        blocks = srt_content.strip().split('\n\n')
+        
+        for block in blocks:
+            lines = block.strip().split('\n')
+            if len(lines) >= 3:
+                try:
+                    # Parse timestamp (format: 00:00:00,000 --> 00:00:03,000)
+                    timestamp_line = lines[1]
+                    if ' --> ' in timestamp_line:
+                        start_time, end_time = timestamp_line.split(' --> ')
+                        
+                        # Convert timestamp to seconds
+                        start_seconds = self._timestamp_to_seconds(start_time.strip())
+                        end_seconds = self._timestamp_to_seconds(end_time.strip())
+                        
+                        # Get subtitle text (join all lines after timestamp)
+                        text = ' '.join(lines[2:]).strip()
+                        
+                        if text and start_seconds is not None and end_seconds is not None:
+                            segments.append({
+                                'start': start_seconds,
+                                'end': end_seconds,
+                                'text': text
+                            })
+                except Exception as e:
+                    logger.warning(f"Error parsing SRT block: {e}")
+                    continue
+        
+        return segments
+    
+    def _timestamp_to_seconds(self, timestamp: str) -> float:
+        """Convert SRT timestamp to seconds"""
+        try:
+            # Format: 00:00:03,000
+            time_part, ms_part = timestamp.split(',')
+            hours, minutes, seconds = map(int, time_part.split(':'))
+            milliseconds = int(ms_part)
+            
+            total_seconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
+            return total_seconds
+            
+        except Exception as e:
+            logger.error(f"Error parsing timestamp {timestamp}: {str(e)}")
+            return None
+    
+    def _add_subtitle_to_frame(self, frame, text: str, width: int, height: int):
+        """Add subtitle text to video frame using OpenCV"""
+        
+        try:
+            import cv2
+            
+            # Text properties
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = min(width, height) / 800  # Scale font based on video size
+            font_thickness = max(1, int(font_scale * 2))
+            
+            # Calculate text size and position
+            text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+            text_x = (width - text_size[0]) // 2
+            text_y = height - 60  # Position near bottom
+            
+            # Add black outline for better visibility
+            outline_thickness = font_thickness + 1
+            cv2.putText(frame, text, (text_x, text_y), font, font_scale, (0, 0, 0), outline_thickness, cv2.LINE_AA)
+            
+            # Add white text on top
+            cv2.putText(frame, text, (text_x, text_y), font, font_scale, (255, 255, 255), font_thickness, cv2.LINE_AA)
+            
+            return frame
+            
+        except Exception as e:
+            logger.error(f"Error adding subtitle to frame: {e}")
+            return frame
     
     def _download_video(self, video_url: str, lesson_title: str, lesson_number: int) -> str:
         """Download video from D-ID"""

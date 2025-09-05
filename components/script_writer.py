@@ -133,7 +133,7 @@ class ScriptWriter:
             # Clean up any remaining formatting
             script = self._clean_script_formatting(script)
             
-            return self._add_timing_cues(script)
+            return script
             
         except Exception as e:
             logger.error(f"Error generating theory script: {str(e)}")
@@ -174,7 +174,7 @@ class ScriptWriter:
             # Clean up any remaining formatting
             script = self._clean_script_formatting(script)
             
-            return self._add_timing_cues(script)
+            return script
             
         except Exception as e:
             logger.error(f"Error generating hands-on script: {str(e)}")
@@ -191,8 +191,6 @@ class ScriptWriter:
         mixed_script = f"""
 {theory_script}
 
-[PAUSE:2s]
-
 Now let's put what we've learned into practice!
 
 {hands_on_script}
@@ -201,7 +199,7 @@ Now let's put what we've learned into practice!
         return mixed_script.strip()
     
     def _clean_script_formatting(self, script: str) -> str:
-        """Clean up script formatting to ensure it's plain text"""
+        """Clean up script formatting to ensure it's plain speech text only"""
         
         # Remove JSON formatting if present
         if script.startswith('{') and script.endswith('}'):
@@ -221,16 +219,36 @@ Now let's put what we've learned into practice!
             except:
                 pass
         
+        # Remove all timing and pacing metadata
+        script = re.sub(r'\[PAUSE[^\]]*\]', '', script)  # Remove [PAUSE:1s], [PAUSE], etc.
+        script = re.sub(r'\[EMPHASIS\]', '', script)     # Remove [EMPHASIS] tags
+        script = re.sub(r'\[/EMPHASIS\]', '', script)    # Remove [/EMPHASIS] tags
+        script = re.sub(r'\[SLOW\]', '', script)         # Remove [SLOW] tags
+        script = re.sub(r'\[/SLOW\]', '', script)        # Remove [/SLOW] tags
+        script = re.sub(r'\[FAST\]', '', script)         # Remove [FAST] tags
+        script = re.sub(r'\[/FAST\]', '', script)        # Remove [/FAST] tags
+        script = re.sub(r'\[BREATH\]', '', script)       # Remove [BREATH] tags
+        
         # Remove markdown formatting
         script = script.replace('```', '').replace('**', '').replace('*', '')
         
         # Remove any remaining JSON-like structures
         script = re.sub(r'"[^"]*":\s*', '', script)
         script = re.sub(r'\{[^}]*\}', '', script)
-        script = re.sub(r'\[[^\]]*\]', '', script)
+        script = re.sub(r'\[[^\]]*\]', '', script)       # Remove any remaining [tags]
         
-        # Clean up extra whitespace
+        # Remove stage directions and speaker instructions
+        script = re.sub(r'\([^)]*\)', '', script)        # Remove (stage directions)
+        script = re.sub(r'NARRATOR:', '', script, flags=re.IGNORECASE)
+        script = re.sub(r'SPEAKER:', '', script, flags=re.IGNORECASE)
+        script = re.sub(r'PRESENTER:', '', script, flags=re.IGNORECASE)
+        
+        # Clean up extra whitespace and normalize spacing
         script = re.sub(r'\s+', ' ', script).strip()
+        script = re.sub(r'\s*\.\s*', '. ', script)       # Normalize periods
+        script = re.sub(r'\s*,\s*', ', ', script)        # Normalize commas
+        script = re.sub(r'\s*!\s*', '! ', script)        # Normalize exclamations
+        script = re.sub(r'\s*\?\s*', '? ', script)       # Normalize questions
         
         return script
     
