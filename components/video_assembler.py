@@ -6,8 +6,26 @@ Assembles final videos by combining AI presenter with backgrounds
 import os
 import logging
 from typing import Dict, List, Any, Optional
-from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip, TextClip
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 from moviepy.video.fx import resize
+
+# Apply MoviePy configuration fix
+try:
+    from moviepy_config_fix import fix_moviepy_config
+    fix_moviepy_config()
+except ImportError:
+    pass
+
+# Test TextClip availability after fix
+try:
+    from moviepy.editor import TextClip
+    # Test if TextClip works
+    test_clip = TextClip("test", fontsize=20, color='white').set_duration(1)
+    test_clip.close()
+    TEXTCLIP_AVAILABLE = True
+except Exception as e:
+    logging.warning(f"TextClip not available due to ImageMagick issue: {e}")
+    TEXTCLIP_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +69,20 @@ class VideoAssembler:
                 logger.error("Failed to load background image")
                 return presenter_video  # Return original if processing fails
             
-            # Create title overlay
+            # Create title overlay (with fallback)
             title_clip = self._create_title_overlay(lesson_title, lesson_number)
+            
+            # If TextClip failed, try PIL-based title image
+            if title_clip is None and TEXTCLIP_AVAILABLE == False:
+                logger.info("Using PIL-based title overlay as fallback")
+                title_image_path = self._create_simple_title_image(lesson_title, lesson_number)
+                if title_image_path:
+                    try:
+                        title_image_clip = ImageClip(title_image_path).set_duration(3).set_position(('center', 50))
+                        title_clip = title_image_clip
+                    except Exception as e:
+                        logger.warning(f"PIL title image failed: {e}")
+                        title_clip = None
             
             # Compose final video
             final_video = self._compose_video_layers(
@@ -108,17 +138,23 @@ class VideoAssembler:
             logger.error(f"Error loading background clip: {str(e)}")
             return None
     
-    def _create_title_overlay(self, lesson_title: str, lesson_number: int) -> Optional[TextClip]:
+    def _create_title_overlay(self, lesson_title: str, lesson_number: int) -> Optional[CompositeVideoClip]:
         """Create title overlay for the video"""
         
+        if not TEXTCLIP_AVAILABLE:
+            logger.info("TextClip not available due to ImageMagick configuration - skipping title overlay")
+            return None
+        
         try:
+            from moviepy.editor import TextClip
+            
             # Create lesson number text
             lesson_num_text = f"LESSON {lesson_number}"
             lesson_num_clip = TextClip(
                 lesson_num_text, 
                 fontsize=48, 
                 color='white',
-                font='Arial-Bold'
+                method='caption'  # Use caption method to avoid font issues
             ).set_position(('center', 100)).set_duration(3)
             
             # Create lesson title text
@@ -126,7 +162,7 @@ class VideoAssembler:
                 lesson_title, 
                 fontsize=36, 
                 color='white',
-                font='Arial'
+                method='caption'  # Use caption method to avoid font issues
             ).set_position(('center', 160)).set_duration(3)
             
             # Combine title elements
@@ -135,12 +171,55 @@ class VideoAssembler:
             return title_overlay
             
         except Exception as e:
-            logger.error(f"Error creating title overlay: {str(e)}")
+            logger.warning(f"TextClip failed, creating video without title overlay: {str(e)}")
+            return None
+    
+    def _create_simple_title_image(self, lesson_title: str, lesson_number: int) -> Optional[str]:
+        """Create a simple title image using PIL as fallback"""
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            import tempfile
+            
+            # Create image
+            img = Image.new('RGBA', (1920, 200), color=(0, 0, 0, 128))  # Semi-transparent black
+            draw = ImageDraw.Draw(img)
+            
+            try:
+                # Try to use a system font
+                title_font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 48)
+                subtitle_font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", 36)
+            except:
+                # Fallback to default font
+                title_font = ImageFont.load_default()
+                subtitle_font = ImageFont.load_default()
+            
+            # Draw lesson number
+            lesson_text = f"LESSON {lesson_number}"
+            bbox = draw.textbbox((0, 0), lesson_text, font=title_font)
+            text_width = bbox[2] - bbox[0]
+            x = (1920 - text_width) // 2
+            draw.text((x, 30), lesson_text, font=title_font, fill='white')
+            
+            # Draw lesson title
+            bbox = draw.textbbox((0, 0), lesson_title, font=subtitle_font)
+            text_width = bbox[2] - bbox[0]
+            x = (1920 - text_width) // 2
+            draw.text((x, 90), lesson_title, font=subtitle_font, fill='white')
+            
+            # Save temporary image
+            temp_file = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            img.save(temp_file.name)
+            temp_file.close()
+            
+            return temp_file.name
+            
+        except Exception as e:
+            logger.warning(f"Could not create title image: {e}")
             return None
     
     def _compose_video_layers(self, presenter_clip: VideoFileClip, 
                              background_clip: ImageClip, 
-                             title_clip: Optional[TextClip]) -> CompositeVideoClip:
+                             title_clip) -> CompositeVideoClip:
         """Compose video layers together"""
         
         # Set background duration to match presenter

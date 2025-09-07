@@ -273,12 +273,110 @@ class MockDIDClient:
         self.base_dir = base_dir or "output_test"
     
     def create_video(self, script_text: str, lesson_title: str, lesson_number: int) -> str:
-        """Mock video creation"""
+        """Mock video creation with audio"""
         
-        # Create mock video file
-        video_path = create_mock_video_file(lesson_title, lesson_number, self.base_dir)
+        # Create mock video file with audio
+        video_path = create_mock_video_with_audio(lesson_title, lesson_number, script_text, self.base_dir)
         
         return video_path
+
+def create_mock_video_with_audio(lesson_title: str, lesson_number: int, script_text: str, base_dir: str = "output_test", is_fallback: bool = False) -> str:
+    """Create a mock video file with text-to-speech audio"""
+    
+    try:
+        # Create output directory
+        subdir = "fallback" if is_fallback else "presenter"
+        output_dir = os.path.join(base_dir, "videos", subdir)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Create safe filename
+        safe_title = "".join(c for c in lesson_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_title = safe_title.replace(' ', '_')
+        
+        suffix = "_enhanced_fallback" if is_fallback else "_presenter"
+        filename = f"lesson_{lesson_number:02d}_{safe_title}{suffix}.mp4"
+        output_path = os.path.join(output_dir, filename)
+        
+        # Calculate video duration based on script length (roughly 150 words per minute)
+        word_count = len(script_text.split())
+        duration_seconds = max(10, int(word_count / 2.5))  # Roughly 150 WPM
+        
+        # Create video with ffmpeg
+        try:
+            import subprocess
+            
+            # Create a simple colored video with text overlay
+            video_cmd = [
+                'ffmpeg', '-y',
+                '-f', 'lavfi',
+                '-i', f'color=c=blue:size=1280x720:duration={duration_seconds}',
+                '-vf', f'drawtext=text=\'{lesson_title}\\nLesson {lesson_number}\\n\\n{"[ENHANCED FALLBACK WITH TTS]" if is_fallback else "[MOCK VIDEO WITH TTS]"}\':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                output_path
+            ]
+            
+            subprocess.run(video_cmd, capture_output=True, check=True, timeout=30)
+            
+            # Try to add TTS audio
+            try:
+                import tempfile
+                import platform
+                
+                # Create temporary audio file
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio:
+                    temp_audio_path = temp_audio.name
+                
+                # Generate TTS audio based on platform
+                system = platform.system().lower()
+                
+                if system == "darwin":  # macOS
+                    tts_cmd = ['say', '-o', temp_audio_path, script_text]
+                elif system == "windows":
+                    # Windows SAPI
+                    tts_cmd = ['powershell', '-Command', f'Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.SetOutputToWaveFile("{temp_audio_path}"); $synth.Speak("{script_text}"); $synth.Dispose()']
+                else:  # Linux
+                    tts_cmd = ['espeak', '-w', temp_audio_path, script_text]
+                
+                # Generate audio
+                subprocess.run(tts_cmd, capture_output=True, check=True, timeout=60)
+                
+                # Combine video with audio
+                temp_video_path = output_path + '_temp.mp4'
+                os.rename(output_path, temp_video_path)
+                
+                combine_cmd = [
+                    'ffmpeg', '-y',
+                    '-i', temp_video_path,
+                    '-i', temp_audio_path,
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-shortest',
+                    output_path
+                ]
+                
+                subprocess.run(combine_cmd, capture_output=True, check=True, timeout=30)
+                
+                # Cleanup
+                os.unlink(temp_video_path)
+                os.unlink(temp_audio_path)
+                
+                print(f"✅ Created {'enhanced fallback' if is_fallback else 'mock'} video with TTS: {output_path}")
+                
+            except Exception as audio_error:
+                print(f"⚠️ TTS failed, video created without audio: {audio_error}")
+                
+            return output_path
+            
+        except subprocess.CalledProcessError as e:
+            print(f"FFmpeg error: {e}")
+            # Fallback to basic video creation
+            return create_mock_video_file(lesson_title, lesson_number, base_dir)
+            
+    except Exception as e:
+        logger.debug(f"Mock video audio creation failed, using silent fallback: {e}")
+        # Ultimate fallback - silent video
+        return create_mock_video_file(lesson_title, lesson_number, base_dir)
 
 def create_mock_image_file(topic: str, title: str) -> str:
     """Create a mock image file for testing"""

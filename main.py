@@ -84,7 +84,7 @@ class CourseCreator:
             self.notebook_creator = NotebookCreator()
             self.script_writer = ScriptWriter(openai_key, test_mode=self.config.test_mode)
             self.background_generator = BackgroundGenerator(openai_key, test_mode=self.config.test_mode, domain=self.domain)
-            self.ai_presenter = AIPresenter(did_key, test_mode=self.config.test_mode, domain=self.domain)
+            self.ai_presenter = AIPresenter(did_key, test_mode=self.config.test_mode, domain=self.domain, use_opensource=True)
             self.video_assembler = VideoAssembler(domain=self.domain)
             self.course_packager = CoursePackager(domain=self.domain)
             

@@ -10,6 +10,7 @@ import json
 import logging
 from typing import Dict, List, Any, Optional
 from mocks.mock_clients import MockDIDClient
+from components.opensource_presenter import OpenSourcePresenter
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,19 @@ class AIPresenter:
     Generates AI presenter videos using D-ID API
     """
     
-    def __init__(self, did_api_key: str, test_mode: bool = False, domain: str = None):
+    def __init__(self, did_api_key: str, test_mode: bool = False, domain: str = None, use_opensource: bool = True):
         """Initialize with D-ID API key and test mode flag"""
         self.test_mode = test_mode
         self.did_api_key = did_api_key
         self.domain = domain
+        self.use_opensource = use_opensource
+        
+        # Initialize open-source presenter
+        if self.use_opensource:
+            logger.info("🚀 Using open-source AI presenter (no API costs!)")
+            self.opensource_presenter = OpenSourcePresenter(domain)
+        else:
+            self.opensource_presenter = None
         
         if self.test_mode:
             logger.info("Using mock D-ID client for testing")
@@ -87,13 +96,22 @@ class AIPresenter:
         try:
             logger.info(f"Creating presenter video for lesson {lesson_number}: {lesson_title}")
             
+            # Priority 1: Use open-source presenter (best option)
+            if self.use_opensource and self.opensource_presenter:
+                try:
+                    video_path = self.opensource_presenter.create_presenter_video(script_text, lesson_title, lesson_number)
+                    logger.info(f"✅ Open-source presenter video created: {video_path}")
+                    return video_path
+                except Exception as e:
+                    logger.warning(f"Open-source presenter failed, falling back to D-ID: {e}")
+            
+            # Priority 2: Use test mode mock
             if self.test_mode:
-                # Use mock client in test mode
                 video_path = self.client.create_video(script_text, lesson_title, lesson_number)
                 logger.info(f"Mock video created: {video_path}")
                 return video_path
             
-            # Create video using D-ID API
+            # Priority 3: Use D-ID API (last resort)
             video_path = self._create_did_video(script_text, lesson_title, lesson_number)
             
             logger.info(f"Presenter video created successfully: {video_path}")
@@ -101,8 +119,13 @@ class AIPresenter:
             
         except Exception as e:
             logger.error(f"Error creating presenter video: {str(e)}")
-            # Create fallback video
-            fallback_path = self._create_fallback_video(lesson_title, lesson_number)
+            # Check if it's a credits issue
+            if "402" in str(e) or "payment" in str(e).lower() or "credit" in str(e).lower():
+                logger.error("🚨 D-ID API credits exhausted! Please add credits to your account.")
+                logger.error("Visit: https://studio.d-id.com/account-settings to add credits")
+            
+            # Create enhanced fallback video with TTS voice
+            fallback_path = self._create_enhanced_fallback_video(script_text, lesson_title, lesson_number)
             return fallback_path
     
     def _create_did_video(self, script_text: str, lesson_title: str, lesson_number: int) -> str:
@@ -510,6 +533,42 @@ class AIPresenter:
         except Exception as e:
             logger.error(f"Error in batch video creation: {str(e)}")
             return {}
+    
+    def _create_enhanced_fallback_video(self, script_text: str, lesson_title: str, lesson_number: int) -> str:
+        """Create enhanced fallback video with TTS voice when D-ID API fails"""
+        
+        try:
+            # Create output directory
+            output_dir = os.path.join(self.base_dir, "videos", "fallback")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Create filename
+            safe_title = "".join(c for c in lesson_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            safe_title = safe_title.replace(' ', '_')
+            filename = f"lesson_{lesson_number:02d}_{safe_title}_enhanced_fallback.mp4"
+            output_path = os.path.join(output_dir, filename)
+            
+            logger.info(f"Creating enhanced fallback video with TTS: {output_path}")
+            
+            # Use the same TTS logic as the mock video system
+            from mocks.mock_clients import create_mock_video_with_audio
+            
+            # Create video with TTS audio
+            video_path = create_mock_video_with_audio(
+                lesson_title=lesson_title,
+                lesson_number=lesson_number, 
+                script_text=script_text,
+                base_dir=self.base_dir,
+                is_fallback=True
+            )
+            
+            logger.info(f"Enhanced fallback video created: {video_path}")
+            return video_path
+            
+        except Exception as e:
+            logger.error(f"Error creating enhanced fallback video: {str(e)}")
+            # Fall back to basic fallback
+            return self._create_fallback_video(lesson_title, lesson_number)
     
     def _create_fallback_video(self, lesson_title: str, lesson_number: int) -> str:
         """Create a simple fallback video if generation fails"""
