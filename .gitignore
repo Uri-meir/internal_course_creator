@@ -31,6 +31,7 @@ myenv/
 venv/
 env/
 ENV/
+knowledge_env/
 
 # Logs
 *.log
@@ -38,6 +39,7 @@ ENV/
 # Output directories
 output/
 output_test/
+uploads/
 
 # IDE
 .vscode/
@@ -52,3 +54,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Database backups
+*.sql
+backup.sql

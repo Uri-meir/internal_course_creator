@@ -1,0 +1,15 @@
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/knowledge_db
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# File Storage
+UPLOAD_DIR=./uploads
+
+# External APIs
+HEYGEN_API_KEY=your_heygen_api_key_here
+HEYGEN_API_URL=https://api.heygen.com
