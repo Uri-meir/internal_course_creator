@@ -19,19 +19,22 @@ class CourseService:
     
     async def generate_course(self, request: CourseGenerationRequest) -> CourseGenerationResponse:
         """Start course generation job"""
+        # Convert UUIDs to strings for JSON storage
+        document_ids_str = [str(doc_id) for doc_id in request.document_ids]
+        
         # Create job record
         job = CourseGenerationJob(
-            document_ids=request.document_ids,
-            topic=request.topic,
-            department=request.department
+            document_ids=document_ids_str,  # Store as strings
+            topic=request.topic
         )
         
         self.db.add(job)
         self.db.commit()
         self.db.refresh(job)
         
-        # Start background processing
-        await self._process_course_generation(job.id)
+        # Start background processing with Celery
+        from services.background_worker import generate_course_task
+        generate_course_task.delay(str(job.id))
         
         return CourseGenerationResponse(
             job_id=job.id,
@@ -45,6 +48,7 @@ class CourseService:
         if not job:
             return None
         
+        # Convert to response using the new mapping method
         return JobStatusResponse.from_orm(job)
     
     async def _process_course_generation(self, job_id: uuid.UUID):
@@ -85,11 +89,14 @@ class CourseService:
             job.error_message = str(e)
             self.db.commit()
     
-    async def _get_document_summaries(self, document_ids: List[uuid.UUID]) -> List[str]:
+    async def _get_document_summaries(self, document_ids: List[str]) -> List[str]:
         """Get summaries for documents"""
         summaries = []
         
-        for doc_id in document_ids:
+        for doc_id_str in document_ids:
+            # Convert string back to UUID for database query
+            doc_id = uuid.UUID(doc_id_str)
+            
             # Get document
             document = self.db.query(Document).filter(Document.id == doc_id).first()
             if document:

@@ -2,7 +2,7 @@
 Pydantic schemas for API validation
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
@@ -70,10 +70,26 @@ class JobStatusResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
+    
+    @classmethod
+    def from_orm(cls, job):
+        """Convert database model to response"""
+        return cls(
+            job_id=job.id,  # Map id to job_id
+            status=job.status,
+            progress=job.progress,
+            result_url=job.result_url,
+            error_message=job.error_message,
+            created_at=job.created_at,
+            completed_at=job.completed_at
+        )
+    
+    class Config:
+        from_attributes = True
 
 class ChatRequest(BaseModel):
     message: str
-    department: Optional[str] = None
+    department: Optional[str] = Field(None, description="Optional department filter. Leave empty to search all documents.")
 
 class ChatResponse(BaseModel):
     response: str

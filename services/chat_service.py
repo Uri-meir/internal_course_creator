@@ -44,7 +44,7 @@ class ChatService:
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful corporate assistant. Answer questions based on the provided context. Be professional, accurate, and helpful. If you don't know something, say so."},
-                    {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {request.message}"}
+                    {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {request.message} answer the question based on the context!"}
                 ],
                 max_tokens=500,
                 temperature=0.3

@@ -9,6 +9,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 import os
+import subprocess
+import threading
+import time
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -19,13 +22,33 @@ from routers import documents, search, courses, chat
 from services.database import init_db
 from services.background_worker import init_workers
 
+def start_celery_worker():
+    """Start Celery worker in background thread"""
+    try:
+        print("🔄 Starting Celery worker...")
+        subprocess.run([
+            'celery', '-A', 'services.background_worker', 
+            'worker', '--loglevel=info', '--concurrency=1'
+        ], check=True)
+    except Exception as e:
+        print(f"❌ Celery worker error: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     try:
         await init_db()
         await init_workers()
+        
+        # Start Celery worker in background thread
+        celery_thread = threading.Thread(target=start_celery_worker, daemon=True)
+        celery_thread.start()
+        
+        # Give Celery a moment to start
+        time.sleep(2)
+        
         print("✅ Knowledge Management Service started successfully")
+        print("✅ Celery worker started in background")
     except Exception as e:
         print(f"❌ Error starting service: {e}")
         raise

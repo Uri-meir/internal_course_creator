@@ -65,7 +65,7 @@ class CourseGenerationJob(Base):
     topic = Column(String(255))
     status = Column(String(50), default="pending")  # pending, processing, completed, failed
     progress = Column(Integer, default=0)
-    result_url = Column(String(500))
+    result_url = Column(Text)
     error_message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True))

@@ -24,6 +24,10 @@ class Settings:
     HEYGEN_API_KEY: str = os.getenv("HEYGEN_API_KEY", "")
     HEYGEN_API_URL: str = os.getenv("HEYGEN_API_URL", "https://api.heygen.com")
     
+    # HeyGen Video Settings (only voice and avatar from .env)
+    HEYGEN_AVATAR_ID: str = os.getenv("HEYGEN_AVATAR_ID", "Lina_Dress_Sitting_Side_public")
+    HEYGEN_VOICE_ID: str = os.getenv("HEYGEN_VOICE_ID", "1bd001e7e50f421d891986aad5158bc3")
+    
     # Vector Settings
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     CHUNK_SIZE: int = 1000
